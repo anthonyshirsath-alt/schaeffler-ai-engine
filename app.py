@@ -1,4 +1,17 @@
 import streamlit as st
+
+def check_password():
+    if "password" not in st.session_state:
+        st.text_input("Corporate Access Key", type="password", key="password")
+        return False
+    if st.session_state["password"] != "Schaeffler2026":
+        st.error("Invalid Access Key")
+        return False
+    return True
+
+if not check_password():
+    st.stop()
+import streamlit as st
 import pandas as pd
 import numpy as np
 import plotly.express as px
