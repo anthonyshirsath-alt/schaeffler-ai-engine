@@ -1,30 +1,4 @@
 import streamlit as st
-
-# --- 🔒 PROFESSIONAL LOGIN GATE ---
-if "authenticated" not in st.session_state:
-    st.session_state["authenticated"] = False
-
-def check_password():
-    if not st.session_state["authenticated"]:
-        st.markdown("<div style='margin-top:100px;'></div>", unsafe_allow_html=True)
-        col1, col2, col3 = st.columns([1, 2, 1])
-        with col2:
-            st.image("https://www.schaeffler.com/remotemedien/media/_shared_media/08_media_relations/logos/schaeffler_logo_green_standard.jpg", width=200)
-            st.subheader("🔐 Strategy Engine Secure Access")
-            pwd = st.text_input("Corporate Access Key", type="password")
-            if st.button("Authorize Access", type="primary", use_container_width=True):
-                if pwd == "Schaeffler2026":
-                    st.session_state["authenticated"] = True
-                    st.rerun()
-                else:
-                    st.error("❌ Invalid Access Key")
-        return False
-    return True
-
-if not check_password():
-    st.stop()
-# --- END LOGIN GATE ---
-import streamlit as st
 import pandas as pd
 import numpy as np
 import plotly.express as px
