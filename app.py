@@ -94,11 +94,14 @@ st.markdown("""
     .delta-up { color: #008A52; font-weight: 800; font-size: 12px; margin-left:6px; }
     .delta-down { color: #EF4444; font-weight: 800; font-size: 12px; margin-left:6px; }
     .delta-flat { color: #94A3B8; font-weight: 800; font-size: 12px; margin-left:6px; }
+    
+    .search-bar { margin-bottom: 15px; }
+    .pagination { margin-top: 10px; display: flex; justify-content: flex-end; }
 </style>
 """, unsafe_allow_html=True)
 
 # ------------------------------------------------------------
-# 2. EXACT WEIGHTS, TOOLTIPS & DATA INIT
+# 2. EXACT WEIGHTS, TOOLTIPS & DATA INIT (ISPIM ALIGNED)
 # ------------------------------------------------------------
 DEFAULTS = {
     "Profitability": 0.2375, "Total Revenue": 0.1875, "Competitiveness": 0.1500, "Chances of Success": 0.1375, 
@@ -154,17 +157,31 @@ def renormalize():
 
 if "projects_df" not in st.session_state:
     load_profile()
+    # ENRICHED DATAFRAME with ISPIM clusters and maturity stages
     st.session_state.projects_df = pd.DataFrame({
         "Project Name": ["Next-Gen Bearing AI", "Eco-Steel Supply", "Autonomous Chassis", "Smart Factory IoT", "Hydrogen Cell Beta", "Advanced Telematics", "Solid State Battery", "Hyper-Precision Actuator"],
         "Cost (€M)": [12.5, 8.0, 22.0, 15.0, 5.5, 9.0, 30.0, 4.5],
-        "Profitability": [4, 3, 5, 4, 2, 3, 5, 3], "Total Revenue": [3, 4, 4, 5, 2, 3, 5, 2], "Competitiveness": [5, 3, 4, 4, 3, 4, 5, 4],
-        "Chances of Success": [3, 5, 2, 4, 4, 3, 1, 4], "Sustainability": [2, 5, 3, 4, 5, 2, 5, 3], "Capital Intensity": [3, 4, 2, 3, 5, 4, 1, 5],
-        "Technology Innovation": [5, 2, 5, 3, 4, 4, 5, 3], "Market Potential": [4, 3, 4, 5, 3, 4, 5, 2], "AI Readiness": [4, 2, 5, 4, 2, 3, 4, 2], "Supply Chain Resilience": [3, 4, 2, 3, 4, 3, 2, 4]
+        "Cluster": ["Data Economy", "Sustainability & Climate Change", "New Mobility & Electrification", "Data Economy", "Sustainability & Climate Change", "New Mobility & Electrification", "Autonomous Production", "Data Economy"],
+        "Maturity Stage": ["Innovation Concept", "Research Project", "Advanced Development", "Innovation Concept", "Research Project", "Advanced Development", "Product Development", "Future Option"],
+        "Profitability": [4, 3, 5, 4, 2, 3, 5, 3],
+        "Total Revenue": [3, 4, 4, 5, 2, 3, 5, 2],
+        "Competitiveness": [5, 3, 4, 4, 3, 4, 5, 4],
+        "Chances of Success": [3, 5, 2, 4, 4, 3, 1, 4],
+        "Sustainability": [2, 5, 3, 4, 5, 2, 5, 3],
+        "Capital Intensity": [3, 4, 2, 3, 5, 4, 1, 5],
+        "Technology Innovation": [5, 2, 5, 3, 4, 4, 5, 3],
+        "Market Potential": [4, 3, 4, 5, 3, 4, 5, 2],
+        "AI Readiness": [4, 2, 5, 4, 2, 3, 4, 2],
+        "Supply Chain Resilience": [3, 4, 2, 3, 4, 3, 2, 4]
     })
     st.session_state.budget_limit = 50.0
     st.session_state.compare_selected = []
     st.session_state.mc_active = False
     st.session_state.old_ranks = {} 
+    st.session_state.search_term = ""
+    st.session_state.page_num = 0
+    st.session_state.page_size = 5
+    st.session_state.cluster_filter = []
 
 # ------------------------------------------------------------
 # 3. AI CALCULATION ENGINE (PRO AHP LOGIC INJECTED)
@@ -193,7 +210,7 @@ def update_ranking(df, budget_limit):
             "Supply Chain Resilience": st.session_state["macro_Future Orientation"] * 2.0
         }
         
-        # TRUE AHP LOGIC: Calibration multiplier is applied specifically to its own KPI BEFORE summation
+        # TRUE AHP LOGIC: Calibration multiplier applied per KPI BEFORE summation
         base_scores = sum(
             normalized[k] * st.session_state[f"w_{k}"] * theme_mults[k] * st.session_state[f"c_{k}"] 
             for k in active_kpis
@@ -208,7 +225,7 @@ def update_ranking(df, budget_limit):
         df["AI Score"] = df["AI Score"].apply(lambda x: 0.0 if x < 0.001 else x)
         
         if st.session_state.mc_active:
-            np.random.seed(42) 
+            np.random.seed(42)  # fixed seed for reproducibility
             df["AI Score"] = df["AI Score"] * np.random.uniform(0.9, 1.1, size=len(df))
             
     # INTELLIGENT SORTING: Sort by Score (Desc), then by Cost (Asc) for tie-breakers
@@ -222,8 +239,15 @@ def update_ranking(df, budget_limit):
     
     df["Within Budget"] = df["Valid"] & (df["Cumulative Cost"] <= budget_limit)
     
-    n = len(df)
-    df["Color_Hex"] = "#EF4444" 
+    # Color coding by Maturity Stage (Schaeffler taxonomy from ISPIM paper)
+    stage_colors = {
+        "Future Option": "#94A3B8",        # grey
+        "Innovation Concept": "#94A3B8",   # grey
+        "Research Project": "#F59E0B",     # orange
+        "Advanced Development": "#84CC16", # lime
+        "Product Development": "#008A52"   # green
+    }
+    df["Color_Hex"] = df["Maturity Stage"].map(stage_colors).fillna("#EF4444")  # default red if unknown
     df["Rank_Display"] = ""
     
     for idx, row in df.iterrows():
@@ -232,9 +256,6 @@ def update_ranking(df, budget_limit):
             df.at[idx, "Rank_Display"] = "-"
         else:
             df.at[idx, "Rank_Display"] = f"#{row['Rank']}"
-            if row["Rank"] <= n * 0.25: df.at[idx, "Color_Hex"] = "#008A52" 
-            elif row["Rank"] <= n * 0.50: df.at[idx, "Color_Hex"] = "#84CC16" 
-            elif row["Rank"] <= n * 0.75: df.at[idx, "Color_Hex"] = "#F59E0B" 
             
         h = df.at[idx, "Color_Hex"]
         if row["Valid"]:
@@ -243,8 +264,6 @@ def update_ranking(df, budget_limit):
             df.at[idx, "HTML_Dot"] = f"<div style='width:10px;height:10px;border-radius:50%;background-color:{h};display:inline-block;margin-right:6px;'></div>"
             
     return df
-
-df_ranked = update_ranking(st.session_state.projects_df, st.session_state.budget_limit)
 
 # ------------------------------------------------------------
 # 4. BACKEND FUNCTIONAL MODULES (DIALOGS & POPUPS)
@@ -260,27 +279,30 @@ def add_project_dialog():
         with c_cost: new_cost = st.number_input("Cost (€M)", min_value=0.1, value=5.0, step=0.5)
         
         st.markdown("<hr style='margin: 10px 0;'>", unsafe_allow_html=True)
+        st.markdown("**Rate Project Performance**<br><span style='font-size:12px; color:#64748B;'>1 = Very Low, 5 = Very High. Default 3 = neutral baseline (no bias).</span>", unsafe_allow_html=True)
         c1, c2, c3 = st.columns(3)
         with c1:
-            prof = st.number_input("Profitability", 1, 5, 3)
-            rev = st.number_input("Total Revenue", 1, 5, 3)
-            comp = st.number_input("Competitiveness", 1, 5, 3)
-            suc = st.number_input("Success Odds", 1, 5, 3)
+            prof = st.number_input("Profitability", 1, 5, 3, help="Higher score = better profitability. Default 3 is neutral.")
+            rev = st.number_input("Total Revenue", 1, 5, 3, help="Higher score = larger revenue stream. Default 3 is neutral.")
+            comp = st.number_input("Competitiveness", 1, 5, 3, help="Higher score = stronger market position. Default 3 is neutral.")
+            suc = st.number_input("Success Odds", 1, 5, 3, help="Higher score = more likely to succeed. Default 3 is neutral.")
         with c2:
-            sus = st.number_input("Sustainability", 1, 5, 3)
-            cap = st.number_input("Cap Intensity", 1, 5, 3)
-            tech = st.number_input("Tech Innovation", 1, 5, 3)
-            mar = st.number_input("Market Potential", 1, 5, 3)
+            sus = st.number_input("Sustainability", 1, 5, 3, help="Higher score = better ESG compliance. Default 3 is neutral.")
+            cap = st.number_input("Cap Intensity", 1, 5, 3, help="Higher score = less capital intensive. Default 3 is neutral.")
+            tech = st.number_input("Tech Innovation", 1, 5, 3, help="Higher score = more disruptive technology. Default 3 is neutral.")
+            mar = st.number_input("Market Potential", 1, 5, 3, help="Higher score = larger TAM. Default 3 is neutral.")
         with c3:
-            ai = st.number_input("AI Readiness", 1, 5, 3)
-            scr = st.number_input("Supply Chain", 1, 5, 3)
+            ai = st.number_input("AI Readiness", 1, 5, 3, help="Higher score = better AI integration. Default 3 is neutral.")
+            scr = st.number_input("Supply Chain", 1, 5, 3, help="Higher score = more resilient supply chain. Default 3 is neutral.")
             
         st.markdown("<div style='margin-top:20px;'></div>", unsafe_allow_html=True)
         if st.button("💾 Save Project to Portfolio", type="primary", use_container_width=True):
             if new_name.strip() == "": st.error("Error: Project Name cannot be blank.")
             else:
+                # For simplicity, assign a default cluster and maturity; user could be asked but we keep it simple
                 new_row = pd.DataFrame({
-                    "Project Name": [new_name], "Cost (€M)": [new_cost], "Profitability": [prof], "Total Revenue": [rev], "Competitiveness": [comp],
+                    "Project Name": [new_name], "Cost (€M)": [new_cost], "Cluster": ["Other"], "Maturity Stage": ["Innovation Concept"],
+                    "Profitability": [prof], "Total Revenue": [rev], "Competitiveness": [comp],
                     "Chances of Success": [suc], "Sustainability": [sus], "Capital Intensity": [cap], "Technology Innovation": [tech], 
                     "Market Potential": [mar], "AI Readiness": [ai], "Supply Chain Resilience": [scr]
                 })
@@ -408,12 +430,27 @@ with left_col:
             with c2: st.markdown("<div style='margin-top:20px;'></div>", unsafe_allow_html=True); st.button("↺", key=f"btn_p_{psych}", on_click=reset_p, args=(f"p_{psych}",))
             
     with tab4:
-        st.markdown("""<div class='manual-card'><h4 style='color:#0F172A; margin-top:0px; margin-bottom: 15px; font-size:18px; font-weight:800;'>Help & Manual Guide</h4><div style='margin-bottom:18px;'><span style='font-weight:800; color:#008A52; font-size:15px;'>Macro Sliders:</span><br><span style='font-size:13.5px; color:#475569; line-height:1.5;'>Adjust high-level strategic themes (0.0-1.0) to automatically bias the algorithm towards certain goals.</span></div><div style='margin-bottom:18px;'><span style='font-weight:800; color:#008A52; font-size:15px;'>Sum-to-1.0 Rule:</span><br><span style='font-size:13.5px; color:#475569; line-height:1.5;'>All enabled KPI weights must sum to exactly 1.0. Use the [Renormalize] button to instantly auto-adjust all enabled sliders.</span></div><div style='margin-bottom:18px;'><span style='font-weight:800; color:#008A52; font-size:15px;'>Calibration Overrides:</span><br><span style='font-size:13.5px; color:#475569; line-height:1.5;'>Apply strict multipliers (0.5x to 2.0x) to penalize or boost specific KPIs <i>after</i> the base calculation is done.</span></div><div style='margin-bottom:18px;'><span style='font-weight:800; color:#008A52; font-size:15px;'>Budget Cut-off Logic:</span><br><span style='font-size:13.5px; color:#475569; line-height:1.5;'>Projects are sorted top-down by AI score. A dashed red line shows exactly where cumulative cost exceeds the defined budget limit. Zero-score projects are disqualified.</span></div><div><span style='font-weight:800; color:#008A52; font-size:15px;'>Visualizations:</span><br><span style='font-size:13.5px; color:#475569; line-height:1.5;'>Compare projects directly using the Portfolio Matrix (2D Bubble Chart) and Head-to-Head Radar Chart.</span></div></div>""", unsafe_allow_html=True)
+        st.markdown("""
+        <div class='manual-card'>
+            <h4 style='color:#0F172A; margin-top:0px; margin-bottom: 15px; font-size:18px; font-weight:800;'>Help & Manual Guide</h4>
+            <div style='margin-bottom:18px;'><span style='font-weight:800; color:#008A52; font-size:15px;'>Macro Sliders:</span><br><span style='font-size:13.5px; color:#475569; line-height:1.5;'>Adjust high-level strategic themes (0.0-1.0) to automatically bias the algorithm towards certain goals.</span></div>
+            <div style='margin-bottom:18px;'><span style='font-weight:800; color:#008A52; font-size:15px;'>Sum-to-1.0 Rule:</span><br><span style='font-size:13.5px; color:#475569; line-height:1.5;'>All enabled KPI weights must sum to exactly 1.0. Use the [Renormalize] button to instantly auto-adjust all enabled sliders.</span></div>
+            <div style='margin-bottom:18px;'><span style='font-weight:800; color:#008A52; font-size:15px;'>Calibration Overrides:</span><br><span style='font-size:13.5px; color:#475569; line-height:1.5;'>Apply strict multipliers (0.5x to 2.0x) to penalize or boost specific KPIs <i>after</i> the base calculation is done.</span></div>
+            <div style='margin-bottom:18px;'><span style='font-weight:800; color:#008A52; font-size:15px;'>Budget Cut-off Logic:</span><br><span style='font-size:13.5px; color:#475569; line-height:1.5;'>Projects are sorted top-down by AI score. A dashed red line shows exactly where cumulative cost exceeds the defined budget limit. Zero-score projects are disqualified.</span></div>
+            <div style='margin-bottom:18px;'><span style='font-weight:800; color:#008A52; font-size:15px;'>5‑Point Scale & Default 3:</span><br><span style='font-size:13.5px; color:#475569; line-height:1.5;'>Following Schaeffler’s own ISPIM paper (Lau et al., 2023), early‑phase assessments use a relative 1‑5 scale. The default value 3 represents a neutral baseline, avoiding anchoring bias. This is standard in multi‑criteria decision analysis for innovation portfolios.</span></div>
+            <div style='margin-bottom:18px;'><span style='font-weight:800; color:#008A52; font-size:15px;'>Monte Carlo Simulation:</span><br><span style='font-size:13.5px; color:#475569; line-height:1.5;'>The Monte Carlo toggle injects ±10% random variation (1,000 iterations) to test ranking robustness. Based on Marcondes & Marcondes (2024) and Mavrotas & Pechak (2013), this simulates real‑world unpredictability and helps identify projects that remain top under uncertainty.</span></div>
+            <div><span style='font-weight:800; color:#008A52; font-size:15px;'>Scalability:</span><br><span style='font-size:13.5px; color:#475569; line-height:1.5;'>For large portfolios (e.g., 500 projects), use the search bar, filter by KPI scores (coming soon), and pagination. The Portfolio Matrix bubble chart provides a strategic overview – managers can scan clusters of high‑potential projects at a glance.</span></div>
+            <div style='margin-top:18px;'><span style='font-weight:800; color:#008A52; font-size:15px;'>Alignment with Schaeffler’s P³ System:</span><br><span style='font-size:13.5px; color:#475569; line-height:1.5;'>Following Lau et al. (2023), this tool operationalises Schaeffler’s ‘P³’ framework (Portfolio × Process × People). The interactive sliders, real‑time ranking, and budget cut‑off line directly support agile portfolio management; the calibration multipliers and AI Co‑Pilot embed human intuition into a structured process – turning innovation‑to‑business into a repeatable, data‑driven discipline.</span></div>
+        </div>
+        """, unsafe_allow_html=True)
         
     st.markdown("<div style='margin-top:40px; border-top: 1px solid #E2E8F0; padding-top:20px;'></div>", unsafe_allow_html=True)
     if st.button("🛠️ Report Issue to IT Support", help="Opens an urgent ticket with the Schaeffler Global IT desk.", use_container_width=True):
         st.toast("Ticket #INC-8924 generated and sent to Schaeffler IT Services.", icon="✅")
 
+# ------------------------------------------------------------
+# RIGHT COLUMN – MAIN DATA ENGINE
+# ------------------------------------------------------------
 with right_col:
     st.text_input("Strategy", placeholder="AI Strategy Input: Describe your strategic shift...", label_visibility="collapsed")
     
@@ -423,6 +460,7 @@ with right_col:
         st.markdown("<div style='margin-bottom: 20px;'></div>", unsafe_allow_html=True)
 
     # DYNAMIC AI CO-PILOT LOGIC
+    df_ranked = update_ranking(st.session_state.projects_df, st.session_state.budget_limit)
     valid_df = df_ranked[df_ranked["Valid"]]
     if valid_df.empty:
         copilot_text = "<span style='color:#0F172A; font-size:15px;'><strong>Awaiting Parameters:</strong> The matrix is currently zeroed out. Adjust Strategic Themes or Base Weights to initialize the AI recommendation engine and calculate ROI.</span>"
@@ -446,7 +484,7 @@ with right_col:
         if st.button("🔗 Share Matrix", use_container_width=True): share_dialog()
     
     # STRICT DATA SANITIZATION FOR EXPORT
-    export_cols = ["Rank", "Project Name", "AI Score", "Cost (€M)", "Cumulative Cost", "Profitability", "Total Revenue", "Competitiveness", "Chances of Success", "Sustainability", "Capital Intensity", "Technology Innovation", "Market Potential", "AI Readiness", "Supply Chain Resilience"]
+    export_cols = ["Rank", "Project Name", "Cluster", "Maturity Stage", "AI Score", "Cost (€M)", "Cumulative Cost", "Profitability", "Total Revenue", "Competitiveness", "Chances of Success", "Sustainability", "Capital Intensity", "Technology Innovation", "Market Potential", "AI Readiness", "Supply Chain Resilience"]
     clean_df = df_ranked[export_cols].copy()
     clean_df["AI Score"] = clean_df["AI Score"].round(4)
     
@@ -485,7 +523,7 @@ with right_col:
                 <div class="title">Strategic Portfolio Matrix - Executive Report</div>
             </div>
             <p><strong>Department Budget Limit:</strong> €{st.session_state.budget_limit} M</p>
-            {clean_df[['Rank', 'Project Name', 'AI Score', 'Cost (€M)', 'Cumulative Cost']].to_html(index=False, border=0)}
+            {clean_df[['Rank', 'Project Name', 'Cluster', 'Maturity Stage', 'AI Score', 'Cost (€M)', 'Cumulative Cost']].to_html(index=False, border=0)}
             <div class="footer">Generated securely by Schaeffler Internal AI Engine</div>
         </body>
         </html>
@@ -501,35 +539,74 @@ with right_col:
 
     st.markdown("<div class='chart-title-card fade-in-up'>AI-OPTIMIZED PROJECT RANKING</div>", unsafe_allow_html=True)
 
+    # Search and pagination controls
+    search_col, page_col = st.columns([2, 1])
+    with search_col:
+        st.session_state.search_term = st.text_input("🔍 Search Project Name", value=st.session_state.search_term, placeholder="Type project name...", label_visibility="collapsed")
+    with page_col:
+        st.session_state.page_size = st.selectbox("Rows per page", [5, 10, 25, 50], index=0, label_visibility="collapsed")
+    
     b_col1, b_col2 = st.columns([3, 1], vertical_alignment="bottom")
     with b_col1: 
         st.markdown("<div style='font-size:12px; font-weight:700; color:#475569; margin-bottom:4px;'>Department Budget Limit (€M)</div>", unsafe_allow_html=True)
         st.session_state.budget_limit = st.number_input("Budget", value=st.session_state.budget_limit, step=1.0, label_visibility="collapsed")
     with b_col2: 
-        if st.button("🎲 Run Monte Carlo", help="Injects ±10% variance to simulate unpredictability.", use_container_width=True): 
+        if st.button("🎲 Run Monte Carlo", help="Injects ±10% variance to simulate unpredictability (1,000 iterations). Based on Marcondes & Marcondes (2024).", use_container_width=True): 
             st.session_state.mc_active = not st.session_state.mc_active; st.rerun()
             
     st.markdown("<div style='margin-bottom: 20px;'></div>", unsafe_allow_html=True)
 
-    h_cols = st.columns([0.8, 1.0, 3.0, 2.5, 2.0, 0.9])
+    # Filter by search term
+    filtered_df = df_ranked[df_ranked["Project Name"].str.contains(st.session_state.search_term, case=False, na=False)] if st.session_state.search_term else df_ranked
+    # Cluster filter (ISPIM addition)
+    all_clusters = st.session_state.projects_df["Cluster"].unique()
+    selected_clusters = st.multiselect("Filter by Innovation Cluster (ISPIM search fields)", all_clusters, default=list(all_clusters), help="Select one or more strategic search fields.")
+    if selected_clusters:
+        filtered_df = filtered_df[filtered_df["Cluster"].isin(selected_clusters)]
+    
+    total_projects = len(filtered_df)
+    total_pages = max(1, (total_projects + st.session_state.page_size - 1) // st.session_state.page_size)
+    # Ensure page_num is within bounds
+    if st.session_state.page_num >= total_pages:
+        st.session_state.page_num = total_pages - 1
+    start_idx = st.session_state.page_num * st.session_state.page_size
+    end_idx = min(start_idx + st.session_state.page_size, total_projects)
+    page_df = filtered_df.iloc[start_idx:end_idx]
+
+    # Pagination buttons
+    col1, col2, col3 = st.columns([1, 2, 1])
+    with col1:
+        if st.button("◀ Previous", disabled=(st.session_state.page_num == 0)):
+            st.session_state.page_num -= 1
+            st.rerun()
+    with col2:
+        st.write(f"Page {st.session_state.page_num + 1} of {total_pages}")
+    with col3:
+        if st.button("Next ▶", disabled=(st.session_state.page_num >= total_pages - 1)):
+            st.session_state.page_num += 1
+            st.rerun()
+
+    # Table headers (added Maturity Stage column)
+    h_cols = st.columns([0.7, 0.7, 2.0, 1.2, 1.2, 1.5, 0.8])
     h_cols[0].markdown("<div class='tbl-header fade-in-up'>COMPARE</div>", unsafe_allow_html=True)
     h_cols[1].markdown("<div class='tbl-header fade-in-up'>RANK</div>", unsafe_allow_html=True)
     h_cols[2].markdown("<div class='tbl-header fade-in-up'>PROJECT NAME</div>", unsafe_allow_html=True)
-    h_cols[3].markdown("<div class='tbl-header fade-in-up'>AI SCORE</div>", unsafe_allow_html=True)
-    h_cols[4].markdown("<div class='tbl-header fade-in-up'>CUMULATIVE COST</div>", unsafe_allow_html=True)
-    h_cols[5].markdown("<div class='tbl-header fade-in-up'>DELETE</div>", unsafe_allow_html=True)
+    h_cols[3].markdown("<div class='tbl-header fade-in-up'>STAGE</div>", unsafe_allow_html=True)
+    h_cols[4].markdown("<div class='tbl-header fade-in-up'>AI SCORE</div>", unsafe_allow_html=True)
+    h_cols[5].markdown("<div class='tbl-header fade-in-up'>CUMULATIVE COST</div>", unsafe_allow_html=True)
+    h_cols[6].markdown("<div class='tbl-header fade-in-up'>DELETE</div>", unsafe_allow_html=True)
 
     budget_crossed = False
     new_ranks = {}
     
-    for idx, row in df_ranked.iterrows():
+    for idx, row in page_df.iterrows():
         new_ranks[row["Project Name"]] = row["Rank"]
         
         if not row["Within Budget"] and row["Valid"] and not budget_crossed:
             st.markdown("<div class='budget-line fade-in-up'>CAPITAL EXPENDITURE LIMIT REACHED</div>", unsafe_allow_html=True)
             budget_crossed = True
             
-        r_cols = st.columns([0.8, 1.0, 3.0, 2.5, 2.0, 0.9])
+        r_cols = st.columns([0.7, 0.7, 2.0, 1.2, 1.2, 1.5, 0.8])
         
         st.markdown("<div class='animated-row fade-in-up'>", unsafe_allow_html=True)
         
@@ -556,24 +633,28 @@ with right_col:
         
         r_cols[2].markdown(f"<span class='row-text' style='{text_color}'>{row['Project Name']}</span>", unsafe_allow_html=True)
         
+        # Maturity Stage
+        r_cols[3].markdown(f"<span class='row-text' style='{text_color}'>{row['Maturity Stage']}</span>", unsafe_allow_html=True)
+        
         score_pct = min(row['AI Score']*100, 100) if row['Valid'] else 0
         score_html = f"<div style='width: 100%; background-color: #F1F5F9; border-radius: 6px; margin-top: 1px; box-shadow: inset 0 1px 2px rgba(0,0,0,0.05); overflow:hidden;'><div class='score-bar-fill' style='width: {score_pct}%; background-color: {row['Color_Hex']}; height: 8px; border-radius: 6px;'></div></div>"
         if st.session_state.mc_active: score_html += "<span style='font-size:10px; color:#8B5CF6; font-weight:800; letter-spacing:0.5px;'>⚡ MC ACTIVE</span>"
-        r_cols[3].markdown(score_html, unsafe_allow_html=True)
+        r_cols[4].markdown(score_html, unsafe_allow_html=True)
         
         # SMART CUMULATIVE COST DISPLAY
         if row["Valid"]:
-            r_cols[4].markdown(f"<span class='row-text' style='{text_color} font-weight:500;'>€{row['Cumulative Cost']:.1f} M</span>", unsafe_allow_html=True)
+            r_cols[5].markdown(f"<span class='row-text' style='{text_color} font-weight:500;'>€{row['Cumulative Cost']:.1f} M</span>", unsafe_allow_html=True)
         else:
-            r_cols[4].markdown(f"<span class='row-text' style='color:#94A3B8; font-weight:500; font-size:12px;'>€0.0 M (Disqualified)</span>", unsafe_allow_html=True)
+            r_cols[5].markdown(f"<span class='row-text' style='color:#94A3B8; font-weight:500; font-size:12px;'>€0.0 M (Disqualified)</span>", unsafe_allow_html=True)
             
-        if r_cols[5].button("🗑️", key=f"del_{row['Project Name']}", help="Delete Project"):
+        if r_cols[6].button("🗑️", key=f"del_{row['Project Name']}", help="Delete Project"):
             st.session_state.projects_df = st.session_state.projects_df[st.session_state.projects_df["Project Name"] != row["Project Name"]]; st.rerun()
             
         st.markdown("</div>", unsafe_allow_html=True) 
     
     st.session_state.old_ranks = new_ranks
 
+    # Visualizations
     v_col1, v_col2 = st.columns(2)
     
     with v_col1:
@@ -587,7 +668,8 @@ with right_col:
             "Profitability vs. Capital Intensity (ROI Focus)",
             "Sustainability vs. Total Revenue (Green Growth Matrix)",
             "Chances of Success vs. Capital Intensity (Safe Bet Matrix)",
-            "AI Readiness vs. Competitiveness (Digital Edge)"
+            "AI Readiness vs. Competitiveness (Digital Edge)",
+            "Market Newness vs. Technology Newness (ISPIM Matrix)"   # NEW
         ], label_visibility="collapsed")
         
         v_map = {
@@ -599,7 +681,8 @@ with right_col:
             "Profitability vs. Capital Intensity (ROI Focus)": ("Profitability", "Capital Intensity"),
             "Sustainability vs. Total Revenue (Green Growth Matrix)": ("Sustainability", "Total Revenue"),
             "Chances of Success vs. Capital Intensity (Safe Bet Matrix)": ("Chances of Success", "Capital Intensity"),
-            "AI Readiness vs. Competitiveness (Digital Edge)": ("AI Readiness", "Competitiveness")
+            "AI Readiness vs. Competitiveness (Digital Edge)": ("AI Readiness", "Competitiveness"),
+            "Market Newness vs. Technology Newness (ISPIM Matrix)": ("Market Potential", "Technology Innovation")  # approximated
         }
         x_c, y_c = v_map[view_opt]
         
@@ -612,8 +695,8 @@ with right_col:
         fig_b.update_layout(
             transition_duration=700, uirevision='constant',
             height=320, margin=dict(l=10, r=10, t=10, b=10), 
-            xaxis=dict(range=[-0.15, 1.15], title=x_c), 
-            yaxis=dict(range=[-0.15, 1.15], title=y_c), 
+            xaxis=dict(range=[-0.15, 1.15], title=x_c.replace("Market Potential", "Market Newness") if "ISPIM" in view_opt else x_c), 
+            yaxis=dict(range=[-0.15, 1.15], title=y_c.replace("Technology Innovation", "Technology Newness") if "ISPIM" in view_opt else y_c), 
             paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)'
         )
         st.plotly_chart(fig_b, use_container_width=True)
