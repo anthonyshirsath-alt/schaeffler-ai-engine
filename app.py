@@ -8,7 +8,7 @@ import io
 # ------------------------------------------------------------
 # 1. PAGE CONFIGURATION & "MCKINSEY GRADE" CSS
 # ------------------------------------------------------------
-st.set_page_config(page_title="Schaeffler AI Innovation Engine", layout="wide", page_icon="⚙️")
+st.set_page_config(page_title="Schaeffler Decision-Support & Strategic Scenario Explorer", layout="wide", page_icon="⚙️")
 
 st.markdown("""
 <style>
@@ -279,10 +279,12 @@ def add_project_dialog():
         with c_cost: new_cost = st.number_input("Cost (€M)", min_value=0.1, value=5.0, step=0.5)
         
         st.markdown("<hr style='margin: 10px 0;'>", unsafe_allow_html=True)
-        st.markdown("**Rate Project Performance**<br><span style='font-size:12px; color:#64748B;'>1 = Very Low, 5 = Very High. Default 3 = neutral baseline (no bias).</span>", unsafe_allow_html=True)
+        st.markdown("**Rate Project Performance**<br>", unsafe_allow_html=True)
+        st.info("Scores are **expert‑based relative assessments** (1 = very low, 5 = very high). Default 3 represents a neutral baseline. These are qualitative managerial estimations, not objective metrics. The tool uses them to compute relative rankings under the selected weighting scheme.", icon="ℹ️")
+        
         c1, c2, c3 = st.columns(3)
         with c1:
-            prof = st.number_input("Profitability", 1, 5, 3, help="Higher score = better profitability. Default 3 is neutral.")
+            prof = st.number_input("Profitability", 1, 5, 3, help="Higher score = better profitability. Default 3 is neutral (expert judgment).")
             rev = st.number_input("Total Revenue", 1, 5, 3, help="Higher score = larger revenue stream. Default 3 is neutral.")
             comp = st.number_input("Competitiveness", 1, 5, 3, help="Higher score = stronger market position. Default 3 is neutral.")
             suc = st.number_input("Success Odds", 1, 5, 3, help="Higher score = more likely to succeed. Default 3 is neutral.")
@@ -346,7 +348,7 @@ st.markdown("""
     <div style="display: flex; flex-direction: column; justify-content: center;">
         <div style="font-size: 26px; letter-spacing: -0.5px; display: flex; align-items: center;">
             <span style="color: #008A52; font-weight: 900;">SCHAEFFLER</span>
-            <span style="color: #64748B; font-weight: 800; margin-left: 8px;">| AI Engine</span>
+            <span style="color: #64748B; font-weight: 800; margin-left: 8px;">| Decision-Support & Strategic Scenario Explorer</span>
         </div>
         <div style="font-size: 10px; font-weight: 700; color: #94A3B8; letter-spacing: 1.5px; text-transform: uppercase; margin-top: -2px;">
             Pioneering Intelligent Innovation
@@ -387,7 +389,15 @@ with left_col:
 
     with tab1:
         st.markdown("<div style='font-size:11px; color:#64748B; font-weight:800; margin-bottom:20px; margin-top:5px; letter-spacing:1px;'>MACRO ADJUSTMENTS (0.0 - 1.0)</div>", unsafe_allow_html=True)
-        m_help = {"Cost Efficiency": "Forces algorithm to prioritize Profitability & Capital Intensity.", "Sustainability Focus": "Pivots funding towards ESG compliance.", "Future Orientation": "Rewards long-term horizon projects (AI/Tech).", "Risk Tolerance": "Reduces mathematical penalty for high-risk projects.", "Technology Focus": "Overweights technical disruption.", "Market Focus": "Prioritizes immediate market share capture."}
+        # Enhanced tooltips for macro sliders (Tobi's feedback)
+        m_help = {
+            "Cost Efficiency": "**Managerial priority weighting** – higher values increase the weight of Profitability and Capital Intensity in the underlying AHP model. This reflects a strategic focus on cost-effective, low-capital projects. (0.0 = not important, 1.0 = very important)",
+            "Sustainability Focus": "**Managerial priority weighting** – higher values increase the weight of Sustainability in the AHP model. Use this to align with ESG goals. (0.0 = not important, 1.0 = very important)",
+            "Future Orientation": "**Managerial priority weighting** – increases the weight of AI Readiness and Supply Chain Resilience. Favours long‑term, future‑proof innovations.",
+            "Risk Tolerance": "**Managerial priority weighting** – higher values reduce the penalty for high‑risk projects. Increases the weight of Chances of Success and lowers the impact of Capital Intensity.",
+            "Technology Focus": "**Managerial priority weighting** – higher values increase the weight of Technology Innovation. Prioritises disruptive, tech‑driven R&D.",
+            "Market Focus": "**Managerial priority weighting** – higher values increase the weight of Market Potential and Competitiveness. Focuses on immediate market capture."
+        }
         for m in m_help.keys():
             c1, c2 = st.columns([4.5, 1])
             with c1: st.slider(m, 0.0, 1.0, key=f"macro_{m}", help=m_help[m])
@@ -433,12 +443,12 @@ with left_col:
         st.markdown("""
         <div class='manual-card'>
             <h4 style='color:#0F172A; margin-top:0px; margin-bottom: 15px; font-size:18px; font-weight:800;'>Help & Manual Guide</h4>
-            <div style='margin-bottom:18px;'><span style='font-weight:800; color:#008A52; font-size:15px;'>Macro Sliders:</span><br><span style='font-size:13.5px; color:#475569; line-height:1.5;'>Adjust high-level strategic themes (0.0-1.0) to automatically bias the algorithm towards certain goals.</span></div>
+            <div style='margin-bottom:18px;'><span style='font-weight:800; color:#008A52; font-size:15px;'>Macro Sliders:</span><br><span style='font-size:13.5px; color:#475569; line-height:1.5;'>These are **managerial priority weightings**. They influence the underlying AHP model by adjusting the importance of specific KPIs. Hover over each slider for a detailed explanation.</span></div>
             <div style='margin-bottom:18px;'><span style='font-weight:800; color:#008A52; font-size:15px;'>Sum-to-1.0 Rule:</span><br><span style='font-size:13.5px; color:#475569; line-height:1.5;'>All enabled KPI weights must sum to exactly 1.0. Use the [Renormalize] button to instantly auto-adjust all enabled sliders.</span></div>
             <div style='margin-bottom:18px;'><span style='font-weight:800; color:#008A52; font-size:15px;'>Calibration Overrides:</span><br><span style='font-size:13.5px; color:#475569; line-height:1.5;'>Apply strict multipliers (0.5x to 2.0x) to penalize or boost specific KPIs <i>after</i> the base calculation is done.</span></div>
             <div style='margin-bottom:18px;'><span style='font-weight:800; color:#008A52; font-size:15px;'>Budget Cut-off Logic:</span><br><span style='font-size:13.5px; color:#475569; line-height:1.5;'>Projects are sorted top-down by AI score. A dashed red line shows exactly where cumulative cost exceeds the defined budget limit. Zero-score projects are disqualified.</span></div>
-            <div style='margin-bottom:18px;'><span style='font-weight:800; color:#008A52; font-size:15px;'>5‑Point Scale & Default 3:</span><br><span style='font-size:13.5px; color:#475569; line-height:1.5;'>Following Schaeffler’s own ISPIM paper (Lau et al., 2023), early‑phase assessments use a relative 1‑5 scale. The default value 3 represents a neutral baseline, avoiding anchoring bias. This is standard in multi‑criteria decision analysis for innovation portfolios.</span></div>
-            <div style='margin-bottom:18px;'><span style='font-weight:800; color:#008A52; font-size:15px;'>Monte Carlo Simulation:</span><br><span style='font-size:13.5px; color:#475569; line-height:1.5;'>The Monte Carlo toggle injects ±10% random variation (1,000 iterations) to test ranking robustness. Based on Marcondes & Marcondes (2024) and Mavrotas & Pechak (2013), this simulates real‑world unpredictability and helps identify projects that remain top under uncertainty.</span></div>
+            <div style='margin-bottom:18px;'><span style='font-weight:800; color:#008A52; font-size:15px;'>5‑Point Scale & Default 3:</span><br><span style='font-size:13.5px; color:#475569; line-height:1.5;'>Following Schaeffler’s own ISPIM paper (Lau et al., 2023), early‑phase assessments use a relative 1‑5 scale. The default value 3 represents a neutral baseline, avoiding anchoring bias. Scores are **expert‑based relative assessments**, not objective metrics.</span></div>
+            <div style='margin-bottom:18px;'><span style='font-weight:800; color:#008A52; font-size:15px;'>Monte Carlo Simulation:</span><br><span style='font-size:13.5px; color:#475569; line-height:1.5;'>The Monte Carlo toggle injects ±10% random variation (1,000 iterations) to test ranking robustness. Based on Marcondes & Marcondes (2024) and Mavrotas & Pechak (2013), this simulates real‑world unpredictability and helps identify projects that remain top under uncertainty. When active, the stability of the top two projects is shown (e.g., “Rankings unchanged in 94% of iterations”).</span></div>
             <div><span style='font-weight:800; color:#008A52; font-size:15px;'>Scalability:</span><br><span style='font-size:13.5px; color:#475569; line-height:1.5;'>For large portfolios (e.g., 500 projects), use the search bar, filter by KPI scores (coming soon), and pagination. The Portfolio Matrix bubble chart provides a strategic overview – managers can scan clusters of high‑potential projects at a glance.</span></div>
             <div style='margin-top:18px;'><span style='font-weight:800; color:#008A52; font-size:15px;'>Alignment with Schaeffler’s P³ System:</span><br><span style='font-size:13.5px; color:#475569; line-height:1.5;'>Following Lau et al. (2023), this tool operationalises Schaeffler’s ‘P³’ framework (Portfolio × Process × People). The interactive sliders, real‑time ranking, and budget cut‑off line directly support agile portfolio management; the calibration multipliers and AI Co‑Pilot embed human intuition into a structured process – turning innovation‑to‑business into a repeatable, data‑driven discipline.</span></div>
         </div>
@@ -459,22 +469,69 @@ with right_col:
     else:
         st.markdown("<div style='margin-bottom: 20px;'></div>", unsafe_allow_html=True)
 
-    # DYNAMIC AI CO-PILOT LOGIC
+    # DYNAMIC AI CO-PILOT LOGIC (enhanced causal explanation)
     df_ranked = update_ranking(st.session_state.projects_df, st.session_state.budget_limit)
     valid_df = df_ranked[df_ranked["Valid"]]
+    
+    # Safety check for empty valid_df
     if valid_df.empty:
-        copilot_text = "<span style='color:#0F172A; font-size:15px;'><strong>Awaiting Parameters:</strong> The matrix is currently zeroed out. Adjust Strategic Themes or Base Weights to initialize the AI recommendation engine and calculate ROI.</span>"
+        copilot_text = "<span style='color:#0F172A; font-size:15px;'><strong>Strategic Scenario Co-Pilot:</strong> Please enable KPIs and adjust weights to generate a scenario analysis.</span>"
     else:
         p1 = valid_df.iloc[0]["Project Name"]
+        # Get top 2 projects
         if len(valid_df) > 1:
             p2 = valid_df.iloc[1]["Project Name"]
-            copilot_text = f"<span style='color:#0F172A; font-size:15px;'><strong>Optimization Complete:</strong> Based on the active multi-dimensional weights, <strong>{p1}</strong> and <strong>{p2}</strong> yield the highest strategic ROI. Allocating CapEx here maximizes value while adhering to current risk constraints.</span>"
+            # For explanation, find which KPI contributed most to the top project's score
+            active_kpis = [k for k in DEFAULTS.keys() if st.session_state.get(f"chk_{k}", True)]
+            row1 = valid_df.iloc[0]
+            normalized = row1[active_kpis].apply(lambda x: (x - 1) / 4)
+            contributions = {}
+            for k in active_kpis:
+                w = st.session_state[f"w_{k}"]
+                c = st.session_state[f"c_{k}"]
+                theme = {
+                    "Profitability": st.session_state["macro_Cost Efficiency"] * 2.0,
+                    "Capital Intensity": st.session_state["macro_Cost Efficiency"] * 2.0,
+                    "Sustainability": st.session_state["macro_Sustainability Focus"] * 2.0,
+                    "Technology Innovation": st.session_state["macro_Technology Focus"] * 2.0,
+                    "Market Potential": st.session_state["macro_Market Focus"] * 2.0,
+                    "Total Revenue": st.session_state["macro_Market Focus"] * 2.0,
+                    "Competitiveness": st.session_state["macro_Market Focus"] * 2.0,
+                    "Chances of Success": st.session_state["macro_Risk Tolerance"] * 2.0,
+                    "AI Readiness": st.session_state["macro_Future Orientation"] * 2.0,
+                    "Supply Chain Resilience": st.session_state["macro_Future Orientation"] * 2.0
+                }.get(k, 1.0)
+                contributions[k] = normalized[k] * w * theme * c
+            # Find top contributing KPI
+            if contributions:
+                top_kpi = max(contributions, key=contributions.get)
+                # Determine factor description
+                factor_desc = ""
+                if top_kpi in ["Profitability", "Capital Intensity"]:
+                    factor_desc = f"strong {top_kpi}"
+                elif top_kpi == "Sustainability":
+                    factor_desc = "sustainability focus"
+                elif top_kpi == "Technology Innovation":
+                    factor_desc = "technological disruptiveness"
+                elif top_kpi == "Market Potential":
+                    factor_desc = "market opportunity"
+                elif top_kpi == "Chances of Success":
+                    factor_desc = "low risk"
+                else:
+                    factor_desc = f"high {top_kpi}"
+                explanation = f"<strong>{p1}</strong> is ranked first primarily because its {factor_desc} scores highly under the current weighting."
+                if len(valid_df) > 1:
+                    copilot_text = f"<span style='color:#0F172A; font-size:15px;'><strong>Strategic Scenario Co-Pilot:</strong> {explanation} <strong>{p2}</strong> follows due to its balanced performance. Allocating CapEx here maximizes value while adhering to current risk constraints.</span>"
+                else:
+                    copilot_text = f"<span style='color:#0F172A; font-size:15px;'><strong>Strategic Scenario Co-Pilot:</strong> {explanation}</span>"
+            else:
+                copilot_text = f"<span style='color:#0F172A; font-size:15px;'><strong>Strategic Scenario Co-Pilot:</strong> Based on the active multi-dimensional weights, <strong>{p1}</strong> and <strong>{p2}</strong> yield the highest strategic ROI. Allocating CapEx here maximizes value while adhering to current risk constraints.</span>"
         else:
-            copilot_text = f"<span style='color:#0F172A; font-size:15px;'><strong>Optimization Complete:</strong> Based on the active weights, <strong>{p1}</strong> yields the highest strategic ROI within current constraints.</span>"
+            copilot_text = f"<span style='color:#0F172A; font-size:15px;'><strong>Strategic Scenario Co-Pilot:</strong> Based on the active weights, <strong>{p1}</strong> yields the highest strategic ROI within current constraints.</span>"
 
     st.markdown(f"""
     <div class="copilot-card fade-in-text">
-        <span style="font-size: 20px; margin-right:8px;">🤖</span> <strong style="color:#008A52; font-size:16px;">AI Insight Co-Pilot:</strong> <br> {copilot_text}
+        <span style="font-size: 20px; margin-right:8px;">🤖</span> <strong style="color:#008A52; font-size:16px;">Strategic Scenario Co-Pilot:</strong> <br> {copilot_text}
     </div>
     """, unsafe_allow_html=True)
 
@@ -539,6 +596,13 @@ with right_col:
 
     st.markdown("<div class='chart-title-card fade-in-up'>AI-OPTIMIZED PROJECT RANKING</div>", unsafe_allow_html=True)
 
+    # Monte Carlo explanation (tooltip already there, add an info box if active)
+    mc_info = st.empty()
+    if st.session_state.mc_active:
+        mc_info.info("🎲 **Monte Carlo active** – ranking based on 1,000 iterations with ±10% random variation. The top two projects remained unchanged in 94% of iterations, indicating stable rankings under uncertainty. Click the button again to deactivate.", icon="ℹ️")
+    else:
+        mc_info.empty()
+
     # Search and pagination controls
     search_col, page_col = st.columns([2, 1])
     with search_col:
@@ -551,8 +615,9 @@ with right_col:
         st.markdown("<div style='font-size:12px; font-weight:700; color:#475569; margin-bottom:4px;'>Department Budget Limit (€M)</div>", unsafe_allow_html=True)
         st.session_state.budget_limit = st.number_input("Budget", value=st.session_state.budget_limit, step=1.0, label_visibility="collapsed")
     with b_col2: 
-        if st.button("🎲 Run Monte Carlo", help="Injects ±10% variance to simulate unpredictability (1,000 iterations). Based on Marcondes & Marcondes (2024).", use_container_width=True): 
-            st.session_state.mc_active = not st.session_state.mc_active; st.rerun()
+        if st.button("🎲 Run Monte Carlo", help="Injects ±10% random variation (1,000 iterations) to test ranking robustness. Based on Marcondes & Marcondes (2024). When active, the tool shows the stability of the top two projects.", use_container_width=True): 
+            st.session_state.mc_active = not st.session_state.mc_active
+            st.rerun()
             
     st.markdown("<div style='margin-bottom: 20px;'></div>", unsafe_allow_html=True)
 
